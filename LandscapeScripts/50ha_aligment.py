@@ -18,6 +18,7 @@ from arosics import COREG, COREG_LOCAL
 #Code for combining dems and cropping them
 #list of auxiliary files neccesary
 wd_path = r"/home/vasquezv/BCI_50ha"
+
 #subdirectories
 path_orthomosaic = os.path.join(wd_path, "Orthophoto")
 path_DSM = os.path.join(wd_path, "DSM")
@@ -29,6 +30,7 @@ path_global= os.path.join(wd_path, "Product_global")
 path_local= os.path.join(wd_path, "Product_local")
 path_local_mean= os.path.join(wd_path, "Product_local_mean")
 path_vertical= os.path.join(wd_path, "Product_vertical")
+
 #create the directories
 if not os.path.exists(path_output):
     os.makedirs(path_output)
@@ -49,12 +51,13 @@ if not os.path.exists(path_local_mean):
 if not os.path.exists(path_vertical):
     os.makedirs(path_vertical)
 
-#read the 50ha shape file
+#read the 50-ha plot shapefile
 BCI_50ha_shapefile = os.path.join(path_aux, "BCI_Plot_50ha.shp")
 BCI_50ha = gpd.read_file(BCI_50ha_shapefile)
 BCI_50ha.to_crs(epsg=32617, inplace=True)
 BCI_50ha_buffer = box(BCI_50ha.bounds.minx-20, BCI_50ha.bounds.miny-20, BCI_50ha.bounds.maxx+20, BCI_50ha.bounds.maxy+20)
-#Create the lidar 2023 product for aligment
+
+#Create the lidar 2023 product for alignment
 #list tiles in lidar folder
 list_of_tiles=os.listdir(path_lidar)
 src_files_to_merge = []
@@ -68,7 +71,8 @@ out_meta.update({"driver": "GTiff", "height": mosaic.shape[1], "width": mosaic.s
 output_lidar_mosaic_50ha=os.path.join(path_aux, "BCI_50ha_lidar.tif")
 with rasterio.open(output_lidar_mosaic_50ha, 'w', **out_meta) as dest:
     dest.write(mosaic)
-#crop the lidar orthomosaic to the 50ha plot
+    
+#crop the lidar orthomosaic to the 50-ha plot
 with rasterio.open(output_lidar_mosaic_50ha) as src:
     out_image, out_transform = rasterio.mask.mask(src, [BCI_50ha_buffer], crop=True)
     out_meta = src.meta.copy()
@@ -76,12 +80,14 @@ with rasterio.open(output_lidar_mosaic_50ha) as src:
     output_lidar_mosaic_50ha_cropped = os.path.join(path_aux, "BCI_50ha_lidar_cropped.tif")
     with rasterio.open(output_lidar_mosaic_50ha_cropped, "w", **out_meta) as dest:
         dest.write(out_image)
-#combine DEM and DTM
+        
+#combine DEM (really the DSM) and DTM
 DTM=os.path.join(path_aux, "DTM_lidar_airborne.tif")
 DEM=os.path.join(path_aux, "DEM_lidar_airborne_nonground.tif")
 with rasterio.open(output_lidar_mosaic_50ha_cropped) as src:
     ortho_data_lidar = src.read()
     ortho_meta_lidar = src.meta.copy()
+    
 #crop the DTM to the 50ha plot
 with rasterio.open(DTM) as src:
      out_image, out_transform = rasterio.mask.mask(src, [BCI_50ha_buffer], crop=True)
@@ -90,6 +96,7 @@ with rasterio.open(DTM) as src:
      DTM_cropped= os.path.join(path_aux, "DTM_lidar_airborne_cropped.tif")
      with rasterio.open(DTM_cropped, "w", **out_meta) as dest:
         dest.write(out_image)
+         
 #reproject and deal with nodata values
 with rasterio.open(DTM_cropped) as src:
     dtm_data_lidar = src.read(1)
@@ -103,6 +110,7 @@ reproject(
     dst_transform=ortho_meta_lidar['transform'],
     dst_crs=ortho_meta_lidar['crs'],
     resampling=Resampling.nearest)
+
 #repeat previous steps with DEM
 with rasterio.open(DEM) as src:
         out_image, out_transform = rasterio.mask.mask(src, [BCI_50ha_buffer], crop=True)
@@ -122,9 +130,11 @@ reproject(
     dst_transform=ortho_meta_lidar['transform'],
     dst_crs=ortho_meta_lidar['crs'],
     resampling=Resampling.nearest)
+
 #combine the orthomosaic with the DTM and DEM
 resampled_dem_lidar = resampled_dem_lidar[np.newaxis, :, :]
 resampled_dtm_lidar = resampled_dtm_lidar[np.newaxis, :, :]
+
 # Initialize a new array with an extra band
 new_ortho_data_lidar = np.zeros((5, ortho_data_lidar.shape[1], ortho_data_lidar.shape[2]))
 new_ortho_data_lidar[:3, :, :] = ortho_data_lidar[:3, :, :]
@@ -136,6 +146,7 @@ ortho_meta_lidar.update(count=ortho_data_lidar.shape[0])
 output_lidar_mosaic_50ha_cropped_DTM_DEM = os.path.join(path_aux, "BCI_50ha_lidar_cropped_DTM_DEM.tif")
 with rasterio.open(output_lidar_mosaic_50ha_cropped_DTM_DEM, 'w', **ortho_meta_lidar) as dst:
     dst.write(ortho_data_lidar)
+    
 #combine the DSM and the orthomosaic
 orthomosaics= os.listdir(path_orthomosaic)
 DSMs= os.listdir(path_DSM)
@@ -169,6 +180,7 @@ for i in range(0, len(orthomosaics)):
     with rasterio.open(out_file_name, 'w', **ortho_meta) as dst:
             dst.write(ortho_data)
     print("finish combining the orthomosaics with the DSMs", i)
+    
 #crop all outputs to the shape of the 50ha plot
 products= os.listdir(path_output)
 for product in products:
@@ -201,7 +213,7 @@ closest_date_path=os.path.join(wd_path,'Product_cropped',closest_date)
 target=os.path.join(wd_path,'Product_cropped',closest_date)
 reference=lidar_orthomosaic
 
-#locally correct the photogrammetry orthomosaic closer to the lidar
+#locally correct the photogrammetry orthomosaic closest to the lidar
 print("starting the local correction")
 if not os.path.exists(os.path.join(wd_path,'Product_local')):
     os.makedirs(os.path.join(wd_path,'Product_local'))
@@ -223,7 +235,7 @@ CRL.calculate_spatial_shifts()
 CRL.correct_shifts()
 
 
-#globally correct the photogrammetry orthomosaic closer to the lidar
+#globally correct the photogrammetry orthomosaic closest to the lidar
 if not os.path.exists(os.path.join(wd_path,'Product_global')):
     os.makedirs(os.path.join(wd_path,'Product_global'))
 
@@ -380,6 +392,7 @@ for date in list_dates[70:90]:
             continue  # Go to the next iteration if RuntimeError  
     xshift= points['X_SHIFT_M'].mean()
     yshift= points['Y_SHIFT_M'].mean()
+    
     #deshift the photogrammetry orthomosaic by applying the mean shift
     # Load the orthomosaic
     with rasterio.open(target, 'r+') as src:
@@ -463,7 +476,8 @@ with rasterio.open(os.path.join(wd_path,'Product_global',closest_date.replace('_
     with rasterio.open(output_path3, 'w', **meta) as dst:
         dst.write(data)
 
-print("finish aligning veritcally the closest date orthomosaic")
+print("finish vertical alignment of the closest date orthomosaic")
+
 #list the horizontally aligened files
 from datetime import datetime
 list_of_files = os.listdir(os.path.join(wd_path, 'Product_global'))
@@ -558,6 +572,7 @@ for date in sorted_files[70:90]:
         time_d=time.time()
         reference_main=output_path3
         print("finish in total time of date: ", start_d-time_d)
+        
 #try both approaches, one for all to the main one and the other for the rest
 
 print("finish forward aligment")
